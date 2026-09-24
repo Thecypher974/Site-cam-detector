@@ -1,656 +1,694 @@
 <!DOCTYPE html>
-<html lang="fr" class="dark">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vision AI - Détection Humain & Objets</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        darkbg: '#0b0f19',
-                        panelbg: '#111827',
-                        accent: '#3b82f6',
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- TensorFlow.js and COCO-SSD Model -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-        .code-font {
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .glow-green { box-shadow: 0 0 15px rgba(34, 197, 94, 0.3); }
-        .glow-red { box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
-        .glow-blue { box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Détection d'objets et caméra</title>
+
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <!-- TensorFlow.js et modèle COCO-SSD -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --accent-green: #22c55e;
+      --accent-red: #ef4444;
+      --accent-blue: #06b6d4;
+      --border-color: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(10px);
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .logo i {
+      color: var(--primary);
+      font-size: 1.5rem;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 1.5rem;
+      flex: 1;
+    }
+
+    @media (max-width: 1024px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .main-viewport {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .video-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 480px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    video {
+      display: none;
+    }
+
+    canvas {
+      max-width: 100%;
+      max-height: 70vh;
+      border-radius: 8px;
+      object-fit: contain;
+    }
+
+    .overlay-status {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      z-index: 10;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--accent-red);
+    }
+
+    .status-dot.active {
+      background-color: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
+    }
+
+    .camera-prompt {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      text-align: center;
+      padding: 2rem;
+      z-index: 5;
+    }
+
+    .btn-start-cam {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.8rem 1.5rem;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn-start-cam:hover {
+      background: var(--primary-hover);
+      transform: translateY(-2px);
+    }
+
+    .controls-bar {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      padding: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .select-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex: 1;
+      min-width: 250px;
+    }
+
+    .select-group label {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    select {
+      width: 100%;
+      background: var(--bg-color);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      outline: none;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .btn-icon {
+      background: var(--bg-color);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 0.6rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-icon:hover {
+      background: var(--border-color);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      padding: 1.25rem;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-main);
+    }
+
+    .legend-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-color);
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+
+    .legend-tag {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .color-badge {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .slider-group label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--primary);
+    }
+
+    .detection-log {
+      max-height: 200px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .log-item {
+      font-size: 0.8rem;
+      padding: 0.5rem;
+      background: var(--bg-color);
+      border-left: 3px solid var(--primary);
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+
+    .log-time {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-bottom: 2px;
+    }
+
+    #loader {
+      position: absolute;
+      background: rgba(15, 23, 42, 0.9);
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      z-index: 20;
+      border-radius: 16px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid var(--border-color);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
-<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col justify-between selection:bg-accent selection:text-white">
+<body>
 
-    <!-- Header / Navbar -->
-    <header class="border-b border-slate-800 bg-panelbg/80 backdrop-blur-md sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="p-2 bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30">
-                    <i class="fa-solid fa-eye text-xl"></i>
-                </div>
-                <div>
-                    <h1 class="font-bold text-lg leading-tight tracking-wide bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">
-                        Vision AI Detector
-                    </h1>
-                    <p class="text-xs text-slate-400">Inspiration du script Python YOLOv8 & PyTTSx3</p>
-                </div>
-            </div>
-            <!-- Live Status Badges -->
-            <div class="flex items-center space-x-3 text-xs">
-                <div id="statusBadge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-slate-400">
-                    <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
-                    <span id="statusText" class="font-medium">Initialisation du modèle...</span>
-                </div>
-                <div class="hidden sm:flex items-center space-x-1 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 code-font text-slate-300">
-                    <i class="fa-solid fa-gauge-high text-xs text-slate-400 mr-1"></i>
-                    <span id="fpsCount">0</span> FPS
-                </div>
-            </div>
+  <header>
+    <div class="logo">
+      <i class="fa-solid fa-camera-rotate"></i>
+      <span>Vision Detection IA</span>
+    </div>
+    <div id="fps-display" style="font-size: 0.85rem; color: var(--text-muted);">
+      FPS: 0
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="main-viewport">
+      <div class="video-card">
+        <div id="loader">
+          <div class="spinner"></div>
+          <p id="loader-text">Chargement du modèle COCO-SSD...</p>
         </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grow w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="overlay-status">
+          <div id="status-dot" class="status-dot"></div>
+          <span id="status-text">Caméra Inactive</span>
+        </div>
 
-        <!-- Left Column: Camera Viewport (8 Cols) -->
-        <section class="lg:col-span-8 flex flex-col space-y-4">
-            <!-- Canvas Container -->
-            <div class="relative w-full aspect-video bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl flex items-center justify-center group">
-                <!-- Hidden HTML5 Video element used as stream source -->
-                <video id="webcam" autoplay playsinline muted class="hidden"></video>
-                
-                <!-- Output Canvas where frame & bounding boxes are drawn -->
-                <canvas id="outputCanvas" class="w-full h-full object-contain"></canvas>
+        <div id="camera-prompt" class="camera-prompt">
+          <i class="fa-solid fa-video-slash" style="font-size: 3rem; color: var(--text-muted);"></i>
+          <p>Autorisez l'accès pour utiliser la webcam ou le téléphone.</p>
+          <button id="start-btn" class="btn-start-cam">
+            <i class="fa-solid fa-video"></i> Activer la caméra
+          </button>
+        </div>
 
-                <!-- Loading Overlay -->
-                <div id="loadingOverlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center space-y-4 z-20">
-                    <div class="relative flex items-center justify-center">
-                        <div class="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-                        <i class="fa-solid fa-brain absolute text-blue-400 text-xl"></i>
-                    </div>
-                    <div class="text-center space-y-1">
-                        <p class="font-semibold text-slate-200">Chargement de COCO-SSD...</p>
-                        <p class="text-xs text-slate-400">Téléchargement et préparation du réseau de neurones</p>
-                    </div>
-                </div>
+        <div class="canvas-wrapper">
+          <video id="webcam" autoplay playsinline muted></video>
+          <canvas id="output"></canvas>
+        </div>
+      </div>
 
-                <!-- Camera Offline Placeholder -->
-                <div id="offlineOverlay" class="hidden absolute inset-0 bg-slate-900/95 flex flex-col items-center justify-center space-y-3 z-10">
-                    <div class="p-4 rounded-full bg-slate-800 border border-slate-700 text-slate-400">
-                        <i class="fa-solid fa-video-slash text-3xl"></i>
-                    </div>
-                    <p class="text-slate-300 font-medium">Flux vidéo arrêté</p>
-                    <button onclick="toggleCamera()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition duration-200">
-                        Activer la caméra
-                    </button>
-                </div>
+      <div class="controls-bar">
+        <div class="select-group">
+          <label for="camera-select"><i class="fa-solid fa-camera"></i> Caméra :</label>
+          <select id="camera-select" disabled>
+            <option value="">Cliquez sur "Activer la caméra"</option>
+          </select>
+          <button id="refresh-cams" class="btn-icon" title="Rafraîchir les caméras">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+        </div>
+      </div>
+    </div>
 
-                <!-- Live Indicators Overlay -->
-                <div id="liveIndicators" class="absolute top-4 left-4 flex space-x-2 z-10 pointer-events-none opacity-0 transition-opacity duration-300">
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30 backdrop-blur-md">
-                        <span class="w-2 h-2 rounded-full bg-red-500 animate-ping mr-1.5"></span> EN DIRECT
-                    </span>
-                </div>
+    <div class="sidebar">
+      <div class="card">
+        <div class="card-title">
+          <i class="fa-solid fa-sliders"></i> Paramètres
+        </div>
+        <div class="slider-group">
+          <label>Seuil de confiance : <span id="conf-val">50%</span></label>
+          <input type="range" id="conf-slider" min="0.2" max="0.9" step="0.05" value="0.5">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <i class="fa-solid fa-list-check"></i> Objets recherchés
+        </div>
+        <div class="legend-list">
+          <div class="legend-item">
+            <div class="legend-tag">
+              <div class="color-badge" style="background: #00FF00;"></div>
+              <span>Humain</span>
             </div>
-
-            <!-- Controls Panel -->
-            <div class="bg-panelbg border border-slate-800 rounded-2xl p-4 flex flex-wrap gap-4 items-center justify-between shadow-lg">
-                <div class="flex items-center space-x-3">
-                    <button id="btnToggleCam" onclick="toggleCamera()" disabled class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium rounded-xl flex items-center space-x-2 transition shadow-lg shadow-blue-600/20 text-sm">
-                        <i class="fa-solid fa-video"></i>
-                        <span id="btnCamText">Démarrer Caméra</span>
-                    </button>
-                    <button id="btnToggleSound" onclick="toggleSound()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium rounded-xl flex items-center space-x-2 transition text-sm">
-                        <i id="soundIcon" class="fa-solid fa-volume-high text-emerald-400"></i>
-                        <span id="soundText">Audio Actif</span>
-                    </button>
-                </div>
-
-                <!-- Speech Cooldown Gauge Indicator -->
-                <div class="flex items-center space-x-3 px-3 py-1.5 bg-slate-900/80 rounded-xl border border-slate-800">
-                    <div class="text-xs text-slate-400 flex items-center space-x-1">
-                        <i class="fa-solid fa-stopwatch text-indigo-400"></i>
-                        <span>Cooldown Vocal:</span>
-                    </div>
-                    <div class="w-24 bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
-                        <div id="cooldownBar" class="bg-indigo-500 h-full w-full transition-all duration-200"></div>
-                    </div>
-                    <span id="cooldownTimer" class="text-xs code-font text-slate-300 w-8">0.0s</span>
-                </div>
+            <span style="font-size:0.75rem; color: var(--text-muted);">Vert</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-tag">
+              <div class="color-badge" style="background: #FF0000;"></div>
+              <span>Téléphone</span>
             </div>
-        </section>
-
-        <!-- Right Column: Settings & Detections (4 Cols) -->
-        <section class="lg:col-span-4 flex flex-col space-y-4">
-            
-            <!-- Real-time Detections Cards -->
-            <div class="bg-panelbg border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
-                <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                    <span>Cibles Détectées</span>
-                    <i class="fa-solid fa-radar text-blue-400"></i>
-                </h2>
-
-                <div class="grid grid-cols-1 gap-3">
-                    <!-- Person Card -->
-                    <div id="cardPerson" class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between transition-all duration-300">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-9 h-9 rounded-lg bg-green-500/10 text-green-400 border border-green-500/20 flex items-center justify-center">
-                                <i class="fa-solid fa-user"></i>
-                            </div>
-                            <div>
-                                <p class="text-sm font-semibold text-slate-200">Humain</p>
-                                <p class="text-xs text-slate-500 code-font">Classe COCO: person (0)</p>
-                            </div>
-                        </div>
-                        <span id="badgePerson" class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700">Non détecté</span>
-                    </div>
-
-                    <!-- Phone Card -->
-                    <div id="cardPhone" class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between transition-all duration-300">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-9 h-9 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 flex items-center justify-center">
-                                <i class="fa-solid fa-mobile-screen-button"></i>
-                            </div>
-                            <div>
-                                <p class="text-sm font-semibold text-slate-200">Téléphone</p>
-                                <p class="text-xs text-slate-500 code-font">Classe COCO: cell phone (67)</p>
-                            </div>
-                        </div>
-                        <span id="badgePhone" class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700">Non détecté</span>
-                    </div>
-
-                    <!-- Glasses/Tie Card -->
-                    <div id="cardGlasses" class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between transition-all duration-300">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center">
-                                <i class="fa-solid fa-glasses"></i>
-                            </div>
-                            <div>
-                                <p class="text-sm font-semibold text-slate-200">Lunettes / Cravate</p>
-                                <p class="text-xs text-slate-500 code-font">Classe COCO: tie (27)</p>
-                            </div>
-                        </div>
-                        <span id="badgeGlasses" class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700">Non détecté</span>
-                    </div>
-                </div>
+            <span style="font-size:0.75rem; color: var(--text-muted);">Rouge</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-tag">
+              <div class="color-badge" style="background: #0000FF;"></div>
+              <span>Cravate / Lunettes</span>
             </div>
+            <span style="font-size:0.75rem; color: var(--text-muted);">Bleu</span>
+          </div>
+        </div>
+      </div>
 
-            <!-- Parameters & Configuration -->
-            <div class="bg-panelbg border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
-                <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                    <span>Paramètres de Détection</span>
-                    <i class="fa-solid fa-sliders text-indigo-400"></i>
-                </h2>
+      <div class="card">
+        <div class="card-title">
+          <i class="fa-solid fa-volume-high"></i> Synthèse Vocale
+        </div>
+        <div class="legend-item">
+          <span>Vocale active (2s)</span>
+          <i class="fa-solid fa-check" style="color: var(--accent-green);"></i>
+        </div>
+      </div>
 
-                <!-- Confidence Threshold Slider -->
-                <div class="space-y-2">
-                    <div class="flex justify-between items-center text-xs">
-                        <label for="confidenceThreshold" class="text-slate-300 font-medium">Seuil de Confiance Min.</label>
-                        <span id="confidenceVal" class="code-font text-blue-400 font-bold">50%</span>
-                    </div>
-                    <input type="range" id="confidenceThreshold" min="20" max="90" value="50" step="5" 
-                        class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
-                    <p class="text-[11px] text-slate-500">Identique au filtre <code class="code-font text-slate-400">conf > 0.5</code> du script Python.</p>
-                </div>
+      <div class="card" style="flex: 1;">
+        <div class="card-title">
+          <i class="fa-solid fa-clock-rotate-left"></i> Historique
+        </div>
+        <div id="detection-log" class="detection-log">
+          <div class="log-item">En attente de détection...</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-                <!-- Voice Selection -->
-                <div class="space-y-2 pt-2 border-t border-slate-800/80">
-                    <label for="voiceSelect" class="text-xs text-slate-300 font-medium block">Voix de Synthèse Vocale</label>
-                    <select id="voiceSelect" class="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl text-xs p-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        <option value="">Voix par défaut du système</option>
-                    </select>
-                </div>
-            </div>
+  <script>
+    let model = null;
+    let video = document.getElementById('webcam');
+    let canvas = document.getElementById('output');
+    let ctx = canvas.getContext('2d');
+    let currentStream = null;
+    let isDetecting = false;
+    let minConfidence = 0.5;
 
-            <!-- Recent Speech Announcements Feed -->
-            <div class="bg-panelbg border border-slate-800 rounded-2xl p-5 shadow-lg flex-grow flex flex-col space-y-3 min-h-[160px]">
-                <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                    <span>Journal d'Annonces Vocales</span>
-                    <i class="fa-solid fa-bullhorn text-emerald-400"></i>
-                </h2>
-                <div id="speechLog" class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 flex-grow overflow-y-auto max-h-40 space-y-2 text-xs code-font">
-                    <p class="text-slate-500 italic">En attente d'événements de détection...</p>
-                </div>
-            </div>
+    let lastSoundTime = 0;
+    const SOUND_COOLDOWN = 2000; // 2 secondes
 
-        </section>
-    </main>
+    let frameCount = 0;
+    let lastFpsCalc = Date.now();
 
-    <!-- Footer -->
-    <footer class="border-t border-slate-800 bg-panelbg py-3 px-4 text-center text-xs text-slate-500">
-        Vision AI Engine — Modèle YOLO / COCO-SSD exécuté localement en WebGL dans le navigateur.
-    </footer>
+    const loader = document.getElementById('loader');
+    const loaderText = document.getElementById('loader-text');
+    const cameraSelect = document.getElementById('camera-select');
+    const startBtn = document.getElementById('start-btn');
+    const refreshBtn = document.getElementById('refresh-cams');
+    const cameraPrompt = document.getElementById('camera-prompt');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const confSlider = document.getElementById('conf-slider');
+    const confVal = document.getElementById('conf-val');
+    const detectionLog = document.getElementById('detection-log');
+    const fpsDisplay = document.getElementById('fps-display');
 
-    <script>
-        /**
-         * State Variables
-         */
-        let model = null;
-        let video = null;
-        let canvas = null;
-        let ctx = null;
-        let isCameraActive = false;
-        let soundEnabled = true;
-        let minConfidence = 0.50;
+    // Synthèse vocale
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'fr-FR';
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // Chargement du modèle COCO-SSD
+    async function initModel() {
+      try {
+        model = await cocoSsd.load();
+        loader.style.display = 'none';
+      } catch (err) {
+        loaderText.textContent = "Erreur de chargement du modèle IA.";
+        console.error(err);
+      }
+    }
+
+    // Énumérer les caméras
+    async function getCameras() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
         
-        let lastSoundTime = 0;
-        const SOUND_COOLDOWN_MS = 2000; // 2 secondes de cooldown comme le script python
-        
-        // Performance Stats
-        let lastFrameTime = performance.now();
-        let frameCount = 0;
-        let currentFps = 0;
-
-        // UI Element References
-        const elements = {
-            loadingOverlay: document.getElementById('loadingOverlay'),
-            offlineOverlay: document.getElementById('offlineOverlay'),
-            liveIndicators: document.getElementById('liveIndicators'),
-            statusBadge: document.getElementById('statusBadge'),
-            statusDot: document.getElementById('statusDot'),
-            statusText: document.getElementById('statusText'),
-            fpsCount: document.getElementById('fpsCount'),
-            btnToggleCam: document.getElementById('btnToggleCam'),
-            btnCamText: document.getElementById('btnCamText'),
-            soundIcon: document.getElementById('soundIcon'),
-            soundText: document.getElementById('soundText'),
-            cooldownBar: document.getElementById('cooldownBar'),
-            cooldownTimer: document.getElementById('cooldownTimer'),
-            confidenceThreshold: document.getElementById('confidenceThreshold'),
-            confidenceVal: document.getElementById('confidenceVal'),
-            voiceSelect: document.getElementById('voiceSelect'),
-            speechLog: document.getElementById('speechLog'),
-            cardPerson: document.getElementById('cardPerson'),
-            badgePerson: document.getElementById('badgePerson'),
-            cardPhone: document.getElementById('cardPhone'),
-            badgePhone: document.getElementById('badgePhone'),
-            cardGlasses: document.getElementById('cardGlasses'),
-            badgeGlasses: document.getElementById('badgeGlasses'),
-        };
-
-        /**
-         * Speech Synthesis Initialization
-         */
-        const synth = window.speechSynthesis;
-        let frenchVoices = [];
-
-        function populateVoiceList() {
-            if (!synth) return;
-            const voices = synth.getVoices();
-            frenchVoices = voices.filter(v => v.lang.startsWith('fr'));
-            
-            elements.voiceSelect.innerHTML = '';
-            
-            if (frenchVoices.length === 0) {
-                const opt = document.createElement('option');
-                opt.textContent = "Voix française standard";
-                elements.voiceSelect.appendChild(opt);
-            } else {
-                frenchVoices.forEach((voice, index) => {
-                    const option = document.createElement('option');
-                    option.textContent = `${voice.name} (${voice.lang})`;
-                    option.setAttribute('data-index', index);
-                    if (voice.default) option.selected = true;
-                    elements.voiceSelect.appendChild(option);
-                });
-            }
+        cameraSelect.innerHTML = '';
+        if (videoDevices.length === 0) {
+          cameraSelect.innerHTML = '<option value="">Aucune caméra trouvée</option>';
+          return;
         }
 
-        if (speechSynthesis.onvoiceschanged !== undefined) {
-            speechSynthesis.onvoiceschanged = populateVoiceList;
-        }
-
-        /**
-         * Speak Function (Non-blocking using Web Speech API)
-         */
-        function speak(text) {
-            if (!soundEnabled || !synth) return;
-
-            // Annuler les paroles en attente si engorgé
-            if (synth.speaking) {
-                synth.cancel();
-            }
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 1.0;
-            utterance.pitch = 1.0;
-            utterance.lang = 'fr-FR';
-
-            const selectedIndex = elements.voiceSelect.value;
-            if (frenchVoices[selectedIndex]) {
-                utterance.voice = frenchVoices[selectedIndex];
-            }
-
-            synth.speak(utterance);
-            logSpeech(text);
-        }
-
-        function logSpeech(phrase) {
-            const timeStr = new Date().toLocaleTimeString();
-            const logItem = document.createElement('div');
-            logItem.className = 'flex items-center justify-between text-slate-300 border-b border-slate-800/50 pb-1 animate-fade-in';
-            logItem.innerHTML = `
-                <span class="text-emerald-400">▶ "${phrase}"</span>
-                <span class="text-[10px] text-slate-500">${timeStr}</span>
-            `;
-            elements.speechLog.prepend(logItem);
-            if (elements.speechLog.children.length > 10) {
-                elements.speechLog.removeChild(elements.speechLog.lastChild);
-            }
-        }
-
-        /**
-         * Load TensorFlow COCO-SSD Model
-         */
-        async function loadModel() {
-            try {
-                // Initialisation de TensorFlow.js
-                model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
-                
-                elements.loadingOverlay.classList.add('hidden');
-                elements.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
-                elements.statusText.textContent = 'Modèle IA Prêt';
-                elements.btnToggleCam.disabled = false;
-                
-                populateVoiceList();
-                startCamera();
-            } catch (err) {
-                console.error("Erreur de chargement du modèle:", err);
-                elements.statusText.textContent = 'Erreur de chargement IA';
-                elements.statusDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
-            }
-        }
-
-        /**
-         * Start Webcam Stream
-         */
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-                    audio: false
-                });
-
-                video.srcObject = stream;
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        resolve(video);
-                    };
-                });
-
-                video.play();
-                isCameraActive = true;
-                
-                // Adjust Canvas size to video aspect ratio
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-
-                elements.offlineOverlay.classList.add('hidden');
-                elements.liveIndicators.classList.remove('opacity-0');
-                elements.btnCamText.textContent = 'Arrêter Caméra';
-                elements.btnToggleCam.className = 'px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-xl flex items-center space-x-2 transition shadow-lg shadow-red-600/20 text-sm';
-
-                // Start Detection Loop
-                requestAnimationFrame(detectFrame);
-            } catch (err) {
-                console.error("Erreur d'accès à la caméra:", err);
-                alert("Impossible d'accéder à la caméra. Veuillez autoriser l'accès.");
-            }
-        }
-
-        /**
-         * Stop Camera Stream
-         */
-        function stopCamera() {
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-                video.srcObject = null;
-            }
-            isCameraActive = false;
-            elements.offlineOverlay.classList.remove('hidden');
-            elements.liveIndicators.classList.add('opacity-0');
-            elements.btnCamText.textContent = 'Démarrer Caméra';
-            elements.btnToggleCam.className = 'px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl flex items-center space-x-2 transition shadow-lg shadow-blue-600/20 text-sm';
-            
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            resetBadges();
-        }
-
-        function toggleCamera() {
-            if (isCameraActive) {
-                stopCamera();
-            } else {
-                startCamera();
-            }
-        }
-
-        function toggleSound() {
-            soundEnabled = !soundEnabled;
-            if (soundEnabled) {
-                elements.soundIcon.className = "fa-solid fa-volume-high text-emerald-400";
-                elements.soundText.textContent = "Audio Actif";
-            } else {
-                elements.soundIcon.className = "fa-solid fa-volume-xmark text-slate-500";
-                elements.soundText.textContent = "Audio Muet";
-                if (synth) synth.cancel();
-            }
-        }
-
-        /**
-         * Main Detection & Animation Loop
-         */
-        async function detectFrame() {
-            if (!isCameraActive) return;
-
-            // Compute FPS
-            const now = performance.now();
-            frameCount++;
-            if (now - lastFrameTime >= 1000) {
-                currentFps = frameCount;
-                elements.fpsCount.textContent = currentFps;
-                frameCount = 0;
-                lastFrameTime = now;
-            }
-
-            // Draw video frame to canvas
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            // Execute COCO-SSD object detection
-            const predictions = await model.detect(video);
-
-            let human_detected = false;
-            let phone_detected = false;
-            let glasses_detected = false;
-
-            // Process predictions
-            predictions.forEach(prediction => {
-                const conf = prediction.score;
-                const type = prediction.class;
-
-                if (conf >= minConfidence) {
-                    let label = "";
-                    let color = "";
-                    let isTarget = false;
-
-                    // Class mapping aligned with the Python script:
-                    // Class 0: person -> Vert (0, 255, 0)
-                    // Class 67: cell phone -> Rouge (0, 0, 255 / 255,0,0)
-                    // Class 27: tie (Cravate/Lunettes) -> Bleu (255, 0, 0 / 0,0,255)
-                    if (type === 'person') {
-                        human_detected = true;
-                        label = `Humain: ${(conf * 100).toFixed(0)}%`;
-                        color = '#22c55e'; // Green
-                        isTarget = true;
-                    } else if (type === 'cell phone') {
-                        phone_detected = true;
-                        label = `Telephone: ${(conf * 100).toFixed(0)}%`;
-                        color = '#ef4444'; // Red
-                        isTarget = true;
-                    } else if (type === 'tie') {
-                        glasses_detected = true;
-                        label = `Lunettes (cravate): ${(conf * 100).toFixed(0)}%`;
-                        color = '#3b82f6'; // Blue
-                        isTarget = true;
-                    }
-
-                    if (isTarget) {
-                        const [x, y, width, height] = prediction.bbox;
-                        drawBoundingBox(x, y, width, height, label, color);
-                    }
-                }
-            });
-
-            // Update Dashboard Visual Indicators
-            updateDetectionCards(human_detected, phone_detected, glasses_detected);
-
-            // Audio Speech Notification logic with 2-second cooldown
-            const timeSinceLastSound = (now - lastSoundTime) / 1000;
-            updateCooldownBar(timeSinceLastSound);
-
-            if ((human_detected || phone_detected || glasses_detected) && timeSinceLastSound >= (SOUND_COOLDOWN_MS / 1000)) {
-                const detections = [];
-                if (human_detected) detections.push("Humain");
-                if (phone_detected) detections.push("Téléphone");
-                if (glasses_detected) detections.push("Lunettes");
-
-                const phrase = detections.join(" et ") + " détecté" + (detections.length > 1 || glasses_detected ? "s" : "");
-                
-                speak(phrase);
-                lastSoundTime = performance.now();
-            }
-
-            // Loop next frame
-            requestAnimationFrame(detectFrame);
-        }
-
-        /**
-         * Render stylish bounding boxes on canvas
-         */
-        function drawBoundingBox(x, y, width, height, label, color) {
-            ctx.save();
-            
-            // Box Border
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 3;
-            ctx.strokeRect(x, y, width, height);
-
-            // Semi-transparent overlay fill
-            ctx.fillStyle = color + '15'; 
-            ctx.fillRect(x, y, width, height);
-
-            // Label Tag Background
-            ctx.font = 'bold 14px "JetBrains Mono", monospace';
-            const textWidth = ctx.measureText(label).width;
-            const textHeight = 20;
-
-            ctx.fillStyle = color;
-            ctx.fillRect(x, y - textHeight - 4 < 0 ? y : y - textHeight - 4, textWidth + 12, textHeight + 4);
-
-            // Label Text
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(label, x + 6, y - textHeight - 4 < 0 ? y + 15 : y - 6);
-
-            ctx.restore();
-        }
-
-        /**
-         * Update Target Badges UI
-         */
-        function updateDetectionCards(human, phone, glasses) {
-            // Human Badge
-            if (human) {
-                elements.cardPerson.className = "p-3.5 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-between glow-green";
-                elements.badgePerson.className = "px-2.5 py-1 rounded-md text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/40 animate-pulse";
-                elements.badgePerson.textContent = "DÉTECTÉ";
-            } else {
-                elements.cardPerson.className = "p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between";
-                elements.badgePerson.className = "px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700";
-                elements.badgePerson.textContent = "Non détecté";
-            }
-
-            // Phone Badge
-            if (phone) {
-                elements.cardPhone.className = "p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-between glow-red";
-                elements.badgePhone.className = "px-2.5 py-1 rounded-md text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse";
-                elements.badgePhone.textContent = "DÉTECTÉ";
-            } else {
-                elements.cardPhone.className = "p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between";
-                elements.badgePhone.className = "px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700";
-                elements.badgePhone.textContent = "Non détecté";
-            }
-
-            // Glasses/Tie Badge
-            if (glasses) {
-                elements.cardGlasses.className = "p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between glow-blue";
-                elements.badgeGlasses.className = "px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/40 animate-pulse";
-                elements.badgeGlasses.textContent = "DÉTECTÉ";
-            } else {
-                elements.cardGlasses.className = "p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between";
-                elements.badgeGlasses.className = "px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-800 text-slate-500 border border-slate-700";
-                elements.badgeGlasses.textContent = "Non détecté";
-            }
-        }
-
-        function resetBadges() {
-            updateDetectionCards(false, false, false);
-            elements.fpsCount.textContent = '0';
-        }
-
-        /**
-         * Update Speech Cooldown Timer Bar
-         */
-        function updateCooldownBar(secondsElapsed) {
-            const cooldownSec = SOUND_COOLDOWN_MS / 1000;
-            const progress = Math.min(100, (secondsElapsed / cooldownSec) * 100);
-            elements.cooldownBar.style.width = `${progress}%`;
-
-            const remaining = Math.max(0, cooldownSec - secondsElapsed);
-            elements.cooldownTimer.textContent = `${remaining.toFixed(1)}s`;
-
-            if (progress >= 100) {
-                elements.cooldownBar.className = "bg-emerald-500 h-full w-full transition-all duration-200";
-            } else {
-                elements.cooldownBar.className = "bg-amber-500 h-full w-full transition-all duration-200";
-            }
-        }
-
-        /**
-         * Event Listeners & Bootstrapping
-         */
-        elements.confidenceThreshold.addEventListener('input', (e) => {
-            const val = e.target.value;
-            minConfidence = val / 100;
-            elements.confidenceVal.textContent = `${val}%`;
+        videoDevices.forEach((device, index) => {
+          const option = document.createElement('option');
+          option.value = device.deviceId;
+          option.text = device.label || `Caméra ${index + 1}`;
+          cameraSelect.appendChild(option);
         });
 
-        window.onload = () => {
-            video = document.getElementById('webcam');
-            canvas = document.getElementById('outputCanvas');
-            ctx = canvas.getContext('2d');
-            
-            // Start Loading TF Model
-            loadModel();
-        };
-    </script>
+        cameraSelect.disabled = false;
+      } catch (err) {
+        console.error("Erreur énumération :", err);
+      }
+    }
+
+    // Démarrer le flux
+    async function startCamera(deviceId = null) {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+
+      const constraints = {
+        video: deviceId ? { deviceId: { exact: deviceId } } : true,
+        audio: false
+      };
+
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = currentStream;
+
+        await new Promise((resolve) => {
+          video.onloadedmetadata = () => resolve();
+        });
+
+        video.play();
+        cameraPrompt.style.display = 'none';
+        statusDot.classList.add('active');
+        statusText.textContent = "Caméra Active";
+
+        // Obtenir la liste mise à jour après l'autorisation accordée
+        await getCameras();
+        if (deviceId) cameraSelect.value = deviceId;
+
+        if (!isDetecting) {
+          isDetecting = true;
+          detectFrame();
+        }
+      } catch (err) {
+        console.error("Erreur caméra :", err);
+        alert("Impossible d'accéder à la caméra sélectionnée.");
+      }
+    }
+
+    // Boucle de détection
+    async function detectFrame() {
+      if (!isDetecting) return;
+
+      // FPS
+      frameCount++;
+      const now = Date.now();
+      if (now - lastFpsCalc >= 1000) {
+        fpsDisplay.textContent = `FPS: ${frameCount}`;
+        frameCount = 0;
+        lastFpsCalc = now;
+      }
+
+      if (video.readyState === 4 && model) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const predictions = await model.detect(video);
+
+        let humanDetected = false;
+        let phoneDetected = false;
+        let glassesDetected = false;
+
+        predictions.forEach(pred => {
+          if (pred.score >= minConfidence) {
+            let label = "";
+            let color = "";
+
+            if (pred.class === 'person') {
+              humanDetected = true;
+              label = `Humain: ${(pred.score * 100).toFixed(0)}%`;
+              color = '#00FF00';
+            } else if (pred.class === 'cell phone') {
+              phoneDetected = true;
+              label = `Téléphone: ${(pred.score * 100).toFixed(0)}%`;
+              color = '#FF0000';
+            } else if (pred.class === 'tie') {
+              glassesDetected = true;
+              label = `Lunettes (Cravate): ${(pred.score * 100).toFixed(0)}%`;
+              color = '#0000FF';
+            }
+
+            if (color !== "") {
+              const [x, y, width, height] = pred.bbox;
+              
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 3;
+              ctx.strokeRect(x, y, width, height);
+
+              ctx.fillStyle = color;
+              ctx.font = '16px Inter, sans-serif';
+              const textWidth = ctx.measureText(label).width;
+              ctx.fillRect(x, y > 25 ? y - 25 : y, textWidth + 10, 25);
+
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillText(label, x + 5, y > 25 ? y - 7 : y + 18);
+            }
+          }
+        });
+
+        // Synthèse Vocale
+        if ((humanDetected || phoneDetected || glassesDetected) && (now - lastSoundTime > SOUND_COOLDOWN)) {
+          let detections = [];
+          if (humanDetected) detections.push("Humain");
+          if (phoneDetected) detections.push("Téléphone");
+          if (glassesDetected) detections.push("Lunettes");
+
+          let phrase = detections.join(" et ") + " détecté" + (detections.length > 1 || glassesDetected ? "s" : "");
+          speak(phrase);
+          addLog(phrase);
+          lastSoundTime = now;
+        }
+      }
+
+      requestAnimationFrame(detectFrame);
+    }
+
+    function addLog(text) {
+      const timeStr = new Date().toLocaleTimeString();
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `<div class="log-time">${timeStr}</div>${text}`;
+      detectionLog.insertBefore(item, detectionLog.firstChild);
+
+      if (detectionLog.children.length > 10) {
+        detectionLog.removeChild(detectionLog.lastChild);
+      }
+    }
+
+    // Événements
+    startBtn.addEventListener('click', () => startCamera());
+    
+    cameraSelect.addEventListener('change', (e) => {
+      if (e.target.value) startCamera(e.target.value);
+    });
+
+    refreshBtn.addEventListener('click', () => getCameras());
+
+    confSlider.addEventListener('input', (e) => {
+      minConfidence = parseFloat(e.target.value);
+      confVal.textContent = `${Math.round(minConfidence * 100)}%`;
+    });
+
+    // Initialisation du modèle au chargement
+    initModel();
+  </script>
 </body>
 </html>
